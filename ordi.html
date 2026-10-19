@@ -2794,7 +2794,7 @@ function plqMount(){
   const h = document.getElementById('plqYT'); if(!plQ || !h || h.dataset.m) return;
   const t = realTracksCache[state.playingId]; if(!t || !t.youtubeId) return; h.dataset.m = '1';
   ytApi().then(()=>{ if(!document.body.contains(h)) return; h.innerHTML = '<div></div>';
-    new YT.Player(h.firstChild, {width:'100%', height:'152', videoId:t.youtubeId, playerVars:{autoplay:1, playsinline:1, rel:0}, events:{
+    new YT.Player(h.firstChild, {width:'100%', height:'200', videoId:t.youtubeId, playerVars:{autoplay:1, playsinline:1, rel:0}, events:{
       onReady:e=>e.target.playVideo(),
       onStateChange:e=>{ if(e.data===1 && plQ) plQ.err = 0; if(e.data===0) plQNext(); },
       onError:()=>{ if(plQ && ++plQ.err > plQ.items.length){ plQ = null; stopPlayback(); toast('Lecture impossible'); } else plQNext(); } }});
@@ -2846,7 +2846,7 @@ function renderMiniPlayer(){
         <div class="mp-title">${esc(t.title)}</div>
         ${plqBtns()}<button data-action="mini-player-stop" title="Arrêter">✕</button>
       </div>
-      ${plQ ? '<div id="plqYT" style="height:152px;"></div>' : `<iframe style="border-radius:12px;" src="https://www.youtube.com/embed/${t.youtubeId}?autoplay=1&playsinline=1" width="100%" height="152" frameborder="0" allowfullscreen="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="YouTube — ${esc(t.title)}"></iframe>`}
+      ${plQ ? '<div id="plqYT" style="height:200px;"></div>' : `<iframe style="border-radius:12px;" src="https://www.youtube.com/embed/${t.youtubeId}?autoplay=1&playsinline=1" width="100%" height="200" frameborder="0" allowfullscreen="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="YouTube — ${esc(t.title)}"></iframe>`}
       <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:4px;">Si le son ne démarre pas tout seul, appuie sur ▶ dans le cadre ci-dessus — morceau vérifié, jamais un extrait généré.</div>
     </div>`;
   }
@@ -4121,7 +4121,7 @@ class YTA{
   mount(){
     const h = document.getElementById('djY'+this.k); if(!h) return; clearInterval(this.iv); this.ok = false; h.innerHTML = '<div></div>';
     ytApi().then(()=>{
-      this.p = new YT.Player(h.firstChild, {width:'100%', height:'110', videoId:this.src, playerVars:{playsinline:1, rel:0, start:Math.floor(this._t)}, events:{
+      this.p = new YT.Player(h.firstChild, {width:'100%', height:'200', videoId:this.src, playerVars:{playsinline:1, rel:0, start:Math.floor(this._t)}, events:{
         onReady:()=>{ this.ok = true; this.p.setPlaybackRate(this._r); this.p.setVolume(this._v*100); if(this._go) this.p.playVideo(); },
         onStateChange:e=>{ this.paused = e.data !== 1; djSpin(this.k); } }});
       this.iv = setInterval(()=>{ if(!this.ok) return; this._t = this.currentTime; const s = document.getElementById('djS'+this.k), d = this.duration; if(s && d && !this.paused) s.value = this._t/d*1000; }, 500);
@@ -4495,7 +4495,7 @@ function renderTrackOverlay(){
         ${t.youtubeId ? `
           <div style="margin-top:10px;">
             <div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:8px;padding:5px 12px;border-radius:20px;background:rgba(255,0,51,.12);color:#ff0033;font-size:10.5px;font-weight:800;letter-spacing:.2px;">${tr('track.audioRealBadgeYoutube')}</div>
-            <iframe style="border-radius:12px;" src="https://www.youtube.com/embed/${t.youtubeId}" width="100%" height="152" frameborder="0" allowfullscreen="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="YouTube player — ${esc(t.title)}"></iframe>
+            <iframe style="border-radius:12px;" src="https://www.youtube.com/embed/${t.youtubeId}" width="100%" height="200" frameborder="0" allowfullscreen="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title="YouTube player — ${esc(t.title)}"></iframe>
             <div style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:6px;">${tr('track.audioRealNoteYoutube')}</div>
           </div>
         ` : ''}
