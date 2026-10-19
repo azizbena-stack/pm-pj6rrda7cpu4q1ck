@@ -2297,7 +2297,7 @@ async function itunesSearchOnce(term, limit){
   const timer = controller ? setTimeout(()=>controller.abort(), 6000) : null;
   try{
     const q = encodeURIComponent(term);
-    const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=${limit||10}`, controller ? {signal: controller.signal} : {});
+    const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&country=FR&limit=${limit||10}`, controller ? {signal: controller.signal} : {});
     if(!res.ok) return {ok:false};
     const data = await res.json();
     const results = (data && Array.isArray(data.results)) ? data.results : [];
