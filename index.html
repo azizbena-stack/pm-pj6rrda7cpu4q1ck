@@ -1077,7 +1077,7 @@ const state = {
   lang: 'fr', // fr | en | es | de
 };
 
-function isPro(){ return !!(state.user && state.user.isPro); }
+function isPro(){ return !!(state.user && (state.user.isPro || refBonusActive())); }
 
 /* ---------------------------- AUTH + PERSISTENCE (Supabase) ----------------
    Real accounts via Supabase Auth (email+password), with cross-session
@@ -2884,13 +2884,13 @@ function renderView(){
   document.querySelectorAll('.nav-btn').forEach(b=> b.classList.toggle('active', b.dataset.view===state.view));
   const c = document.getElementById('view-container');
   if(state.view==='home') { c.innerHTML = renderHome(); if(cityViewId()) loadHomeCityList(); else if(state.scope==='country') loadHomeCountryList(); else { loadHomeGenreChartList(); loadWorldExtra(); } if(!cityViewId()) loadTrendingReal(); }
-  else if(state.view==='nextbig'){ c.innerHTML = renderNextBig(); if(isPro()) loadNextBigReal(); }
+  else if(state.view==='nextbig'){ c.innerHTML = renderNextBig(); if(isPro()){ loadNextBigReal(); loadPronos(); } }
   else if(state.view==='explore'){ c.innerHTML = renderExplore(); loadExploreTops(); }
   else if(state.view==='playlists') c.innerHTML = renderPlaylists();
   else if(state.view==='radar'){ c.innerHTML = renderRadar(); loadRadar(); }
   else if(state.view==='discover'){ c.innerHTML = '<div class="topbar"><div class="brand-row"><div class="brand"><span class="dot"></span>Je découvre</div></div></div><div id="radarBody"></div><div style="height:10px;"></div>'; renderShazam(); }
   else if(state.view==='dj'){ c.innerHTML = djHTML(); ['A','B'].forEach(k=>DJ[k] && DJ[k].yt && DJ[k].yt.mount()); djRecUI(); djMixList(); }
-  else if(state.view==='profile') c.innerHTML = renderProfile();
+  else if(state.view==='profile'){ c.innerHTML = renderProfile(); if(document.getElementById('refBox')) refLoad(); }
   c.scrollTop = 0;
 }
 
@@ -3239,6 +3239,7 @@ function renderNextBig(){
     <div class="brand-row"><div class="brand"><span class="dot"></span>${tr('nextbig.title')}<small>${tr('nextbig.subtitle')}</small></div>${shareBtn('story-nb')}</div>
   </div>
   <div style="font-size:11px;color:var(--text-muted);padding:0 18px 8px;line-height:1.5;">Les titres qui grimpent le plus vite depuis hier dans tous nos classements (10 genres Beatport + 30 pays Apple Music Dance).</div>
+  <div id="pronoBox"></div>
   <div id="nextBigList" class="hpad" style="display:flex;flex-direction:column;gap:12px;margin-top:4px;"><div class="empty-msg">Chargement…</div></div>
   <div style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:10px;">Powered by Soundcharts</div>
   <div style="height:10px;"></div>`;
@@ -3286,6 +3287,7 @@ async function loadNextBigReal(){
           <div><div style="font-size:17px;font-weight:800;" class="tabular">${x.c.size}</div><div style="font-size:10px;color:var(--text-muted);">${tr('nextbig.countries')}</div></div>
         </div>
         <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-soft);font-size:11px;color:var(--text-secondary);">${esc(where)}</div>
+        <div style="margin-top:10px;"><span class="chip" data-action="prono-bet" data-i="${i}">🎯 Parier sur ce titre</span></div>
       </div>`;
   }).join('');
 }
@@ -3618,6 +3620,7 @@ async function loadRadar(){
   const host = document.getElementById('radarBody');
   if(!host || state.view!=='radar' || state.radarTab!==t || state.radarArtist) return;
   host.innerHTML = html;
+  if(t==='alerts') loadArtistConcerts(host);
 }
 /* ---------------------------- STATISTIQUES ARTISTE (gratuit) ----------------------------
    Présence dans nos classements (genres + pays, positions, mouvements) + catalogue public Apple Music
@@ -3739,8 +3742,11 @@ function renderShazam(){
   const host = document.getElementById('radarBody'); if(!host) return;
   host.innerHTML = `<style>@keyframes shz{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.9);opacity:0}}.shz-on::before,.shz-on::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--brand-a);animation:shz 1.6s infinite}.shz-on::after{animation-delay:.8s}</style>
   <div style="text-align:center;padding:26px 0 8px;"><div style="position:relative;width:210px;height:210px;margin:0 auto;"><div id="shzBtn" data-action="shazam-listen" style="position:relative;z-index:1;width:210px;height:210px;border-radius:50%;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:80px;cursor:pointer;box-shadow:0 8px 34px var(--brand-a);">👂</div></div>
-  <div id="shzMsg" style="margin-top:16px;font-weight:800;font-size:14px;">Touchez pour identifier un morceau</div><div id="shzAuto" style="margin-top:6px;font-size:11px;color:var(--text-muted);">Double-touchez le logo pour le mode automatique</div></div>
-  <div id="shzFound">${foundHTML()}</div>`;
+  <div id="shzMsg" style="margin-top:16px;font-weight:800;font-size:14px;">Touchez pour identifier un morceau</div><div id="shzAuto" style="margin-top:6px;font-size:11px;color:var(--text-muted);">Double-touchez le logo pour le mode soirée (tracklist automatique)</div></div>
+  <div id="shzFound">${foundHTML()}</div>
+  <div class="hpad" style="margin:12px 0 4px;"><button class="btn btn-outline btn-block" data-action="recap-month">📸 Mon récap du mois</button></div>
+  <div id="shzSets">${setsHTML()}</div><div id="shzNow"><div class="empty-msg">Chargement…</div></div>`;
+  loadNowPlaying();
 }
 // AudD lit mal le webm/opus du navigateur : on convertit l'enregistrement en WAV 16 kHz mono.
 function pcmToWav(pcm, sr){
@@ -3754,7 +3760,7 @@ function pcmToWav(pcm, sr){
 let shzErr = '', shzVotes = {};
 let shzAuto = false, shzRun = false, shzRec = null, shzLast = 0, shzDeadline = 0, shzHit = false;
 const shzSay = t => { const m = document.getElementById('shzMsg'); if(m) m.textContent = t; };
-const shzAutoTxt = () => { const a = document.getElementById('shzAuto'); if(a) a.textContent = shzAuto ? '🔁 Mode automatique — touchez le logo pour arrêter' : 'Double-touchez le logo pour le mode automatique'; };
+const shzAutoTxt = () => { const a = document.getElementById('shzAuto'); if(a) a.textContent = shzAuto ? '🔁 Mode soirée — '+(shzSet ? shzSet.items.length : 0)+' morceau(x) dans la tracklist · touchez le logo pour arrêter' : 'Double-touchez le logo pour le mode soirée (tracklist automatique)'; };
 const shzAnim = on => { const b = document.getElementById('shzBtn'); if(b){ b.classList.toggle('shz-on', on); b.parentNode.classList.toggle('shz-on', on); } };
 function shazamStop(){ shzRun = false; shzAuto = false; if(shzRec && shzRec.state!=='inactive') shzRec.stop(); shzAutoTxt(); }
 // Écoute en continu : le micro est lu directement en PCM 16 kHz (pas de décodage) ; toutes les 3 s on envoie à AudD les 6 dernières secondes (fenêtres qui se chevauchent).
@@ -3775,17 +3781,17 @@ async function shazamListen(){
   try{
     while(shzRun){
       await new Promise(r=>setTimeout(r,250));
-      if(shzHit){ shzHit = false; if(!shzAuto) break; shzVotes = {}; shzDeadline = Date.now()+45000; pcm = []; due = Date.now()+7000; continue; }
-      if(Date.now()>=shzDeadline) break;
+      if(shzHit){ shzHit = false; if(!shzAuto) break; shzVotes = {}; shzDeadline = Date.now()+85000; pcm = []; due = Date.now()+40000; continue; } // mode soirée : pause de 40 s après un titre (même morceau, coût AudD)
+      if(Date.now()>=shzDeadline){ if(!shzAuto) break; shzDeadline = Date.now()+45000; shzVotes = {}; } // mode soirée : on continue d'écouter
       if(Date.now()<due) continue;
       due = Date.now()+3000;
       pend.push(shazamIdentify(pcmToWav(Float32Array.from(pcm.slice(-SR*6)), SR)));
     }
     await Promise.all(pend);
     if(shzRun && !shzHit) shzSay('Aucun titre trouvé' + (shzErr ? ' ('+shzErr.slice(0,90)+')' : ''));
-  } finally{ proc.disconnect(); ctx.close(); st.getTracks().forEach(t=>t.stop()); shzAnim(false); shzRun = false; shzAuto = false; shzAutoTxt(); }
+  } finally{ proc.disconnect(); ctx.close(); st.getTracks().forEach(t=>t.stop()); shzAnim(false); shzRun = false; shzAuto = false; shzSetSave(); shzAutoTxt(); }
 }
-document.addEventListener('dblclick', e=>{ if(!e.target.closest || !e.target.closest('#shzBtn')) return; shzAuto = shzRun; shzAutoTxt(); });
+document.addEventListener('dblclick', e=>{ if(!e.target.closest || !e.target.closest('#shzBtn')) return; shzAuto = shzRun; if(shzAuto) shzSetStart(); shzAutoTxt(); });
 async function shazamIdentify(wav){
   try{
     if(wav.rms < 0.005){ if(shzRun) shzSay('Son trop faible : rapprochez-vous de la source.'); return; }
@@ -3798,9 +3804,129 @@ async function shazamIdentify(wav){
     const L = foundList().filter(x=>!(x.t===r.title && x.a===r.artist));
     L.unshift({t:r.title, a:r.artist, cover:(r.apple_music && r.apple_music.artwork && r.apple_music.artwork.url || '').replace('{w}','200').replace('{h}','200'), apple:r.apple_music && r.apple_music.url || '', d:new Date().toISOString().slice(0,10)});
     try{ localStorage.setItem('pm_found', JSON.stringify(L.slice(0,200))); }catch(e){}
+    const nx = L[0]; discoveryPost(nx);
+    if(shzAuto && shzSet){ const last = shzSet.items[shzSet.items.length-1]; if(!last || last.t!==nx.t || last.a!==nx.a) shzSet.items.push({t:nx.t, a:nx.a, h:new Date().toTimeString().slice(0,5)}); shzAutoTxt(); }
     shzSay('✅ '+r.title+' — '+r.artist); const f = document.getElementById('shzFound'); if(f) f.innerHTML = foundHTML();
   }catch(e){ shzErr = String(e && e.message || e); }
 }
+/* ---------------------------- NOUVEAUTÉS 20/10/2026 ----------------------------
+   Tracklist de soirée (mode auto de Je découvre) · Ce qui passe en ce moment (table Supabase discoveries, ville seulement)
+   · Concerts + notifications de vos artistes · Pronostics Futurs hits (predictions) · Récap du mois · Parrainage (referrals).
+   ponytail: paris, parrainage et bonus Premium reposent sur un identifiant d'appareil aléatoire (pm_dev) — à lier au compte et vérifier côté serveur avant le lancement public. */
+const lsGet = (k,d) => { try{ const v = JSON.parse(localStorage.getItem(k)); return v==null ? d : v; }catch(e){ return d; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+function devId(){ let d = lsGet('pm_dev',''); if(!d){ d = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)+Date.now().toString(36)).replace(/-/g,''); lsSet('pm_dev', d); } return d; }
+const sbPost = (table, body) => fetch(SUPABASE_URL+'/rest/v1/'+table, {method:'POST', headers:{...SUPABASE_HEADERS, 'Content-Type':'application/json', Prefer:'return=minimal'}, body:JSON.stringify(body)});
+
+// 1. Tracklist de soirée : en mode automatique (double appui), chaque titre reconnu est ajouté à la tracklist du set, enregistrée à l'arrêt.
+let shzSet = null, shzWake = null;
+function shzSetStart(){ if(!shzSet) shzSet = {d:new Date().toISOString(), items:[]}; try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(w=>{ shzWake = w; }).catch(()=>{}); }catch(e){} }
+function shzSetSave(){
+  try{ if(shzWake){ shzWake.release(); shzWake = null; } }catch(e){}
+  const s = shzSet; shzSet = null; if(!s || !s.items.length) return;
+  const L = lsGet('pm_sets', []); L.unshift(s); lsSet('pm_sets', L.slice(0,50));
+  const h = document.getElementById('shzSets'); if(h) h.innerHTML = setsHTML();
+  toast('🎧 Tracklist enregistrée : '+s.items.length+' morceau(x)');
+}
+const setDate = d => new Date(d).toLocaleString('fr-FR', {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+function setsHTML(){
+  const L = lsGet('pm_sets', []);
+  return `<div class="section-title"><h2>🎧 Tracklists de soirée (${L.length})</h2></div>` + (L.length ? L.map((s,i)=>`<div class="alert-item"><div class="aic">🎧</div><div style="flex:1;min-width:0;"><div class="at">${esc(setDate(s.d))} · ${s.items.length} morceau(x)</div><div class="ad" style="line-height:1.6;">${s.items.slice(0,60).map((x,j)=>`${j+1}. ${esc(x.a)} – ${esc(x.t)} <span style="opacity:.55">${esc(x.h||'')}</span>`).join('<br>')}</div><div class="chiprow" style="padding:6px 0 0;flex-wrap:wrap;overflow:visible;"><span class="chip" data-action="tl-copy" data-i="${i}">📋 Copier</span><span class="chip" data-action="tl-pl" data-i="${i}">＋ Playlist</span><span class="chip" data-action="tl-story" data-i="${i}">📸 Partager</span><span class="chip" data-action="tl-del" data-i="${i}">🗑</span></div></div></div>`).join('')
+    : '<div class="empty-msg">En soirée, double-touchez le logo : le mode automatique note chaque morceau joué par le DJ et crée la tracklist du set. Gardez l\'écran allumé et l\'app ouverte.</div>');
+}
+function setAction(a, i){
+  const L = lsGet('pm_sets', []), s = L[i]; if(!s) return;
+  if(a==='tl-copy'){ const t = 'Tracklist '+setDate(s.d)+' (Pulse Music)\n'+s.items.map((x,j)=>`${j+1}. ${x.a} - ${x.t}`).join('\n'); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(()=>toast('Tracklist copiée')).catch(()=>{ if(navigator.share) navigator.share({text:t}).catch(()=>{}); }); }
+  else if(a==='tl-pl'){ if(!isPro()){ openPaywall(); return; } const n = 'Soirée '+setDate(s.d), l = plMap[n] = plMap[n] || []; s.items.forEach(x=>{ if(!l.some(f=>f.title===x.t && f.artist===x.a)) l.push({title:x.t, artist:x.a}); }); plSave(); toast('Playlist « '+n+' » créée'); }
+  else if(a==='tl-story'){ makeStory('MA SOIRÉE', setDate(s.d)+' · '+s.items.length+' morceaux', s.items.slice(0,10).map((x,j)=>({rank:j+1, title:x.t, sub:x.a}))); }
+  else if(a==='tl-del'){ L.splice(i,1); lsSet('pm_sets', L); const h = document.getElementById('shzSets'); if(h) h.innerHTML = setsHTML(); }
+}
+
+// 2. Ce qui passe en ce moment : chaque titre identifié est partagé avec sa ville seulement (ville du profil, sinon fuseau horaire), sans nom ni compte.
+function myCity(){
+  const u = state.user || {}, c = u.city && cityById(u.city);
+  if(c) return {city:c.name, country:c.country || u.country || ''};
+  let tz = ''; try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }catch(e){}
+  return {city:tz.includes('/') ? tz.split('/').pop().replace(/_/g,' ') : '', country:u.country || ''};
+}
+function discoveryPost(x){ const c = myCity(); sbPost('discoveries', {title:String(x.t).slice(0,200), artist:String(x.a||'').slice(0,200), cover:String(x.cover||'').slice(0,500) || null, city:c.city.slice(0,80) || null, country:c.country.slice(0,4) || null}).catch(()=>{}); }
+async function loadNowPlaying(){
+  let rows = []; try{ rows = await (await fetch(SUPABASE_URL+'/rest/v1/discoveries?select=title,artist,city,country,created_at&order=created_at.desc&limit=500', {headers:SUPABASE_HEADERS})).json(); }catch(e){}
+  const host = document.getElementById('shzNow'); if(!host) return;
+  if(!Array.isArray(rows)) rows = [];
+  const day = rows.filter(r=>Date.now()-new Date(r.created_at) < 86400000), use = day.length ? day : rows, me = myCity().city, by = {};
+  use.forEach(r=>{ const c = r.city || 'Ailleurs', k = (r.title+'|'+r.artist).toLowerCase(), g = by[c] || (by[c] = {n:0, cc:r.country, t:{}}); g.n++; (g.t[k] = g.t[k] || {title:r.title, artist:r.artist, n:0}).n++; });
+  const cities = Object.keys(by).sort((a,b)=>(b===me)-(a===me) || by[b].n-by[a].n).slice(0,8);
+  host.innerHTML = `<div class="section-title"><h2>🗺️ Ce qui passe ${day.length ? 'en ce moment' : 'cette semaine'}</h2></div>` + (cities.length ? cities.map(c=>`<div style="padding:4px 18px 10px;"><div style="font-weight:800;font-size:13px;margin-bottom:4px;">${(countryByCode(by[c].cc)||{}).flag||'📍'} ${esc(c)}${c===me?' (chez vous)':''} · ${by[c].n} identification(s)</div>${Object.values(by[c].t).sort((a,b)=>b.n-a.n).slice(0,5).map(x=>`<div class="ad" style="padding:2px 0;">🎵 ${esc(x.title)} — ${esc(x.artist)}${x.n>1?` <b style="color:var(--brand-a)">×${x.n}</b>`:''}</div>`).join('')}</div>`).join('')
+    : '<div class="empty-msg">Aucun morceau identifié récemment. Les titres trouvés avec Je découvre apparaissent ici, par ville (sans nom d\'utilisateur).</div>');
+}
+
+// 3. Alertes : concerts de vos artistes (Ticketmaster, fonction `events`) + notifications du téléphone/ordinateur quand l'app s'ouvre.
+// ponytail: notification locale à l'ouverture seulement ; vraies notifications push (app fermée) = Firebase + serveur.
+function notifyLocal(body){ try{ if('Notification' in window && Notification.permission==='granted') new Notification('Pulse Music', {body}); }catch(e){} }
+async function loadArtistConcerts(host){
+  const arts = myArtists().slice(0,5), u = state.user || {}, me = myCity();
+  const btn = 'Notification' in window && Notification.permission==='default' ? '<div class="hpad" style="margin:6px 0 4px;"><button class="btn btn-outline btn-block" data-action="notif-on">🔔 Activer les notifications</button></div>' : '';
+  let ev = [];
+  if(arts.length) ev = (await Promise.all(arts.map(n=>fetch(SUPABASE_URL+'/functions/v1/events?name='+encodeURIComponent(n), {headers:SUPABASE_HEADERS}).then(r=>r.json()).then(j=>(j.items||[]).map(x=>({...x, art:n}))).catch(()=>[])))).flat();
+  if(!host.isConnected || state.view!=='radar' || state.radarTab!=='alerts') return;
+  const near = x => (me.city && normText(x.city)===normText(me.city)) || (u.country && [normText(cname(u.country)), normText((countryByCode(u.country)||{}).name)].includes(normText(x.country)));
+  ev.sort((a,b)=>(near(b)-near(a)) || (a.date<b.date ? -1 : 1));
+  const sec = arts.length ? '<div class="section-title"><h2>🎪 Concerts de vos artistes</h2></div>' + (ev.length ? ev.slice(0,10).map(x=>`<div class="alert-item"><div class="aic">${near(x)?'📍':'🎤'}</div><div><div class="at">${normText(x.name).includes(normText(x.art)) ? esc(x.name) : esc(x.art)+' · '+esc(x.name)}</div><div class="ad">${esc([x.venue, x.city, x.country].filter(Boolean).join(', '))}${near(x)?' · <b style="color:var(--brand-a)">près de chez vous</b>':''}</div><div class="atime">${esc(x.date)}</div><div class="chiprow" style="padding:6px 0 0;flex-wrap:wrap;overflow:visible;">${icsChip(x.art+' · '+x.name, x.date, [x.venue, x.city].filter(Boolean).join(', '))}${x.url?`<a class="chip" href="${esc(x.url)}" target="_blank" rel="noopener">🎟️ Billets</a>`:''}</div></div></div>`).join('') : '<div class="empty-msg">Aucun concert annoncé pour vos artistes (source : Ticketmaster).</div>') : '';
+  host.insertAdjacentHTML('afterbegin', btn + sec);
+  const n = ev.filter(near).length; if(n && !sessionStorage.getItem('pm_nearN')){ sessionStorage.setItem('pm_nearN','1'); notifyLocal(n+' concert(s) de vos artistes près de chez vous'); }
+}
+
+// 4. Pronostics « Futurs hits » : 3 paris par semaine, points = places gagnées depuis le pari (+10 s'il entre dans un Top 10).
+const weekId = (d=new Date()) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), wd = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate()+4-wd); const y = t.getUTCFullYear(); return y+'-W'+String(Math.ceil(((t-Date.UTC(y,0,1))/86400000+1)/7)).padStart(2,'0'); };
+const playerName = () => String(state.user && (state.user.artistName || state.user.name) || 'Anonyme').slice(0,40) || 'Anonyme';
+let pronoRows = [];
+async function loadPronos(){
+  let P = []; try{ P = await (await fetch(SUPABASE_URL+'/rest/v1/predictions?select=device,player,title,artist,rank_at_pick&week=eq.'+weekId()+'&limit=3000', {headers:SUPABASE_HEADERS})).json(); }catch(e){}
+  if(!Array.isArray(P)) P = []; pronoRows = P;
+  const rows = await loadRadarRows(), best = {};
+  rows.forEach(r=>{ if(r.kind==='g' && !RG_NAMES[r.key]) return; const k = chartKey(r.title, r.artist); best[k] = Math.min(best[k] || 999, r.rank); });
+  const pts = p => { const b = best[chartKey(p.title, p.artist)]; return b ? Math.max(0, p.rank_at_pick-b) + (b<=10 ? 10 : 0) : 0; };
+  const me = devId(), mine = P.filter(p=>p.device===me), board = {};
+  P.forEach(p=>{ const b = board[p.device] || (board[p.device] = {player:p.player, s:0}); b.s += pts(p); });
+  const top = Object.entries(board).sort((a,b)=>b[1].s-a[1].s).slice(0,10), host = document.getElementById('pronoBox'); if(!host) return;
+  host.innerHTML = `<div class="card" style="margin:0 18px 12px;"><div style="font-weight:800;font-size:14px;">🏆 Pronostics de la semaine</div><div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:4px 0 8px;">Pariez sur 3 titres ci-dessous (🎯). Points = places gagnées depuis votre pari, +10 s'il entre dans un Top 10. Nouveau concours chaque lundi.</div>`
+    + `<div style="font-size:12px;font-weight:800;margin:6px 0 4px;">Vos paris (${mine.length}/3)</div>` + (mine.length ? mine.map(p=>`<div class="ad">🎯 ${esc(p.title)} — ${esc(p.artist)} · parié à #${p.rank_at_pick} → <b>${pts(p)} pt(s)</b></div>`).join('') : '<div class="ad">Aucun pari pour l\'instant.</div>')
+    + `<div style="font-size:12px;font-weight:800;margin:10px 0 4px;">Classement des dénicheurs</div>` + (top.length ? top.map(([d,b],i)=>`<div class="ad">${['🥇','🥈','🥉'][i] || (i+1)+'.'} ${esc(b.player)}${d===me?' (vous)':''} · <b>${b.s} pt(s)</b></div>`).join('') : '<div class="ad">Soyez le premier à parier cette semaine.</div>') + '</div>';
+}
+async function pronoBet(x){
+  const me = devId();
+  if(pronoRows.filter(p=>p.device===me).length>=3){ toast('3 paris maximum par semaine'); return; }
+  try{ const r = await sbPost('predictions', {week:weekId(), device:me, player:playerName(), title:String(x.title).slice(0,200), artist:String(x.artist||'').slice(0,200), cover:String(x.cover||'').slice(0,500) || null, rank_at_pick:Math.min(1000, x.best)}); if(!r.ok) throw 0; toast('🎯 Pari enregistré'); loadPronos(); }
+  catch(e){ toast('Pari refusé : déjà parié sur ce titre, ou 3 paris atteints'); }
+}
+
+// 5. Récap du mois : image Story (même modèle que « Partager ») avec les découvertes du mois.
+function recapMonth(){
+  const now = new Date(), ym = now.toISOString().slice(0,7), F = foundList().filter(x=>String(x.d||'').startsWith(ym)), S = lsGet('pm_sets', []).filter(s=>String(s.d).startsWith(ym));
+  if(!F.length && !S.length){ toast('Rien ce mois-ci : identifiez des morceaux avec Je découvre'); return; }
+  const cnt = {}; F.forEach(x=>{ const a = leadArtist(x.a); cnt[a] = (cnt[a]||0)+1; }); const topA = Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+  makeStory('MON MOIS', now.toLocaleDateString('fr-FR', {month:'long', year:'numeric'})+' · '+F.length+' découverte(s)'+(S.length ? ' · '+S.length+' soirée(s)' : '')+(topA ? ' · ⭐ '+topA[0] : ''), F.slice(0,10).map((x,i)=>({rank:i+1, title:x.t, sub:x.a})));
+}
+
+// 6. Parrainage : lien ?ref=CODE ; chaque fois que 3 amis entrent dans l'app avec votre lien → 1 mois de Premium offert.
+const refCode = () => devId().slice(0,8);
+const refLink = () => (/^https?:/.test(location.protocol) ? location.origin+location.pathname : 'https://azizbena-stack.github.io/pm-pj6rrda7cpu4q1ck/')+'?ref='+refCode();
+function refBonusActive(){ return lsGet('pm_ref_until', 0) > Date.now(); }
+function refCapture(){ try{ const r = new URLSearchParams(location.search).get('ref'); if(r && /^[a-z0-9]{6,16}$/i.test(r) && r!==refCode() && !lsGet('pm_ref_sent', false)) lsSet('pm_ref_in', r); }catch(e){} }
+function refSend(){ const r = lsGet('pm_ref_in', ''); if(!r || lsGet('pm_ref_sent', false)) return; sbPost('referrals', {code:r, device:devId()}).then(res=>{ if(res.ok || res.status===409) lsSet('pm_ref_sent', true); }).catch(()=>{}); }
+let refCount = null;
+async function refLoad(){
+  try{ const j = await (await fetch(SUPABASE_URL+'/rest/v1/referrals?select=id&code=eq.'+refCode(), {headers:SUPABASE_HEADERS})).json(); refCount = Array.isArray(j) ? j.length : 0; }catch(e){ return; }
+  const months = Math.floor(refCount/3), got = lsGet('pm_ref_months', 0);
+  if(months>got){ lsSet('pm_ref_until', Math.max(Date.now(), lsGet('pm_ref_until', 0))+(months-got)*30*86400000); lsSet('pm_ref_months', months); toast('🎁 '+(months-got)+' mois de Premium offert(s) grâce à vos amis !'); if(state.view!=='profile') renderView(); }
+  const h = document.getElementById('refBox'); if(h) h.innerHTML = refHTML();
+}
+function refHTML(){
+  const until = lsGet('pm_ref_until', 0);
+  return `<div class="card" style="background:linear-gradient(135deg,#1c1430,#12121c);border-color:rgba(255,43,214,.35);"><div style="font-weight:800;font-size:14px;">🎁 Parrainage</div><p style="color:var(--text-muted);font-size:12px;line-height:1.6;margin:6px 0 8px;">Invitez 3 amis avec votre lien : 1 mois de Premium offert. Chaque nouveau groupe de 3 amis = 1 mois de plus.</p><div style="font-size:12px;font-weight:800;">${refCount==null ? '…' : refCount} ami(s) inscrit(s) · encore ${refCount==null ? 3 : 3-refCount%3} pour le prochain mois</div>${until>Date.now() ? `<div class="ad" style="color:var(--good-text);margin-top:4px;">Premium offert jusqu'au ${new Date(until).toLocaleDateString('fr-FR')}</div>` : ''}<button class="btn btn-primary btn-block" style="margin-top:10px;" data-action="ref-share">📤 Partager mon lien</button></div>`;
+}
+function refShare(){ const url = refLink(), text = 'Les vrais classements électro, les futurs hits et Je découvre : rejoins-moi sur Pulse Music'; if(navigator.share){ navigator.share({title:'Pulse Music', text, url}).catch(()=>{}); return; } (navigator.clipboard ? navigator.clipboard.writeText(text+' '+url) : Promise.reject()).then(()=>toast('Lien copié')).catch(()=>prompt('Votre lien :', url)); }
 const catPlay = (t,a,c)=>{ const id = 'cat-'+strSeed(t+'|'+a), p = DEMO_PROFILES[0]; realTracksCache[id] = {id, isRealCity:true, title:t, artist:a, coverUrl:c||null, coverSeed:strSeed(t+a)%9999, genre:cityTrackGenre(t,a), demoProfile:p, demoBpm:p.bpm, youtubeId:ytLookup(t,a)}; return `<button class="icon-btn" data-action="toggle-play" data-id="${id}" style="margin-left:auto;flex:0 0 auto;">▶</button>`; };
 /* ---------------------------- DJ : 2 platines + table de mixage (extraits Apple 30 s) ---------------------------- */
 const DJ = {}; let djCtx = null, djMaster = null, djX = 50, djRes = [], djTimer = null;
@@ -4355,6 +4481,8 @@ function renderProfile(){
       <button class="btn btn-primary btn-block" data-action="open-paywall">${tr('profile.viewProOffer')}</button>
     </div>
   </div>` : ''}
+
+  <div class="hpad" style="margin-top:14px;" id="refBox">${refHTML()}</div>
 
   <div class="section-title"><h2>${tr('profile.language')}</h2></div>
   <div class="hpad">${langSwitcherHTML(state.lang)}</div>
@@ -4936,6 +5064,11 @@ document.addEventListener('click', async (e)=>{
   else if(a==='add-artist'){ try{ localStorage.setItem('pm_extra_artists', JSON.stringify(extraArtists().concat(el.dataset.n))); }catch(e){} renderView(); }
   else if(a==='del-artist'){ const n = el.dataset.n; if(state.user && normText(state.user.artistName)===normText(n)){ state.user.artistName = ''; persistState(); } try{ localStorage.setItem('pm_extra_artists', JSON.stringify(extraArtists().filter(x=>normText(x)!==normText(n)))); }catch(e){} renderView(); }
   else if(a==='shazam-listen'){ shazamListen(); }
+  else if(/^tl-(copy|pl|story|del)$/.test(a)){ setAction(a, +el.dataset.i); }
+  else if(a==='recap-month'){ recapMonth(); }
+  else if(a==='prono-bet'){ const x = nbLast[+el.dataset.i]; if(x) pronoBet(x); }
+  else if(a==='notif-on'){ if('Notification' in window) Notification.requestPermission().then(p=>{ toast(p==='granted' ? '🔔 Notifications activées' : 'Notifications refusées'); if(p!=='default') el.remove(); }); }
+  else if(a==='ref-share'){ refShare(); }
   else if(a==='found-del'){ const L = foundList(); L.splice(+el.dataset.i,1); try{ localStorage.setItem('pm_found', JSON.stringify(L)); }catch(e){} const f = document.getElementById('shzFound'); if(f) f.innerHTML = foundHTML(); }
   else if(a==='radar-back'){ state.radarArtist = null; renderView(); }
   else if(a==='stats-tab'){ state.statsTab = el.dataset.t; loadArtistStats(); }
@@ -4977,18 +5110,19 @@ document.addEventListener('change', (e)=>{
 // À l'ouverture : prévient s'il y a du nouveau sur vos artistes / favoris (même calcul que Radar → Alertes, sans les « Plus fortes hausses »).
 function radarAlertToast(){
   if(!Object.keys(favMap).length && !myArtists().length) return;
-  loadRadarRows().then(rows=>{ const n = (radarAlertsHTML(rows).split('📈 Plus fortes hausses')[0].match(/class="alert-item"/g)||[]).length; if(n) toast('🔔 '+n+' alerte(s) : voir Radar → Alertes'); }).catch(()=>{});
+  loadRadarRows().then(rows=>{ const n = (radarAlertsHTML(rows).split('📈 Plus fortes hausses')[0].match(/class="alert-item"/g)||[]).length; if(n){ toast('🔔 '+n+' alerte(s) : voir Radar → Alertes'); notifyLocal(n+' alerte(s) sur vos artistes et favoris'); } }).catch(()=>{});
 }
 function enterApp(){
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
   state.view='home';
-  renderView(); radarAlertToast();
+  renderView(); radarAlertToast(); refSend(); refLoad();
 }
 
 /* init: render immediately on the auth screen, then light up real persistence
    once the db/user capabilities resolve — if a saved profile is found, skip
    straight past the auth screen for a returning DJ. */
+refCapture();
 applyI18n();
 renderAuthScreen();
 initPersistence().then(()=>{
