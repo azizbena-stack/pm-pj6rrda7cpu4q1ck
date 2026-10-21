@@ -4339,7 +4339,15 @@ async function loadArtistStats(){
   const name = state.radarArtist;
   const pf = state.statsPlatform || 'spotify';
   // Quota Soundcharts : seul l'onglet ouvert interroge Soundcharts (Vue d'ensemble ou Audience).
-  const tb = state.statsTab==='audience' ? 'audience' : 'overview', aud = tb==='audience';
+  const tb = ['audience','events'].includes(state.statsTab) ? state.statsTab : 'overview', aud = tb==='audience';
+  const tab = (k,l)=>`<span class="chip ${k===tb?'active':''}" data-action="stats-tab" data-t="${k}">${l}</span>`;
+  const tabsH = `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;margin-top:8px;">${tab('overview','📊 Vue d\'ensemble')}${tab('audience','🎧 Audience')}${tab('events','🎪 Événements')}</div>`;
+  if(tb==='events'){ // Événements : Ticketmaster seulement (gratuit, aucun appel Soundcharts)
+    let tm = []; try{ tm = (await (await fetch(SUPABASE_URL+'/functions/v1/events?name='+encodeURIComponent(name), {headers:SUPABASE_HEADERS})).json()).items || []; }catch(e){}
+    const host = document.getElementById('radarBody'); if(!host || state.radarArtist!==name || state.statsTab!=='events') return;
+    host.innerHTML = tabsH + (tm.length ? '<div class="section-title"><h2>🎪 Événements à venir</h2></div>' + tm.map(x=>`<div class="alert-item"><div class="aic">🎤</div><div><div class="at">${esc(x.name)}</div><div class="ad">${esc([x.venue, x.city, x.country].filter(Boolean).join(', '))}</div><div class="atime">${esc(x.date)}</div><div class="chiprow" style="padding:6px 0 0;flex-wrap:wrap;overflow:visible;">${icsChip(x.name, x.date, [x.venue, x.city, x.country].filter(Boolean).join(', '))}${x.url ? `<a class="chip" href="${esc(x.url)}" target="_blank" rel="noopener">🎟️ Billets</a>` : ''}</div></div></div>`).join('') : '<div class="empty-msg">Aucun événement à venir trouvé.</div>') + '<div class="hpad" style="font-size:10px;color:var(--text-muted);margin-top:14px;">Source : Ticketmaster</div>';
+    return;
+  }
   const [rows, world, sd] = await Promise.all([loadRadarRows(), aud ? fetchWorld() : null, aud && (pf==='spotify'||pf==='youtube') ? fetchArtistListen(name, pf) : null]);
   const host = document.getElementById('radarBody');
   if(!host || state.radarArtist!==name) return;
@@ -4450,8 +4458,7 @@ async function loadArtistStats(){
   }
   out += h('🔗 Voir l\'artiste') + `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;">${platformLinks(name)}</div>`
     + '<div class="hpad" style="font-size:10px;color:var(--text-muted);margin-top:14px;line-height:1.5;">Sources : classements Beatport / Apple Music · Powered by Soundcharts</div>';
-  const tab = (k,l)=>`<span class="chip ${k===tb?'active':''}" data-action="stats-tab" data-t="${k}">${l}</span>`;
-  host.innerHTML = `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;margin-top:8px;">${tab('overview','📊 Vue d\'ensemble')}${tab('audience','🎧 Audience')}</div>` + (aud ? out.slice(iB) : out);
+  host.innerHTML = tabsH + (aud ? out.slice(iB) : out);
 }
 
 function radarSavedHTML(rows){
