@@ -361,6 +361,34 @@ body{padding:0; display:block; background:#0a0a0f;}
 #playChoice .btn-block > div{display:none;}
 #authScreen .auth-wrap{justify-content:safe center; overflow-y:auto; scrollbar-width:none;}
 #authScreen .auth-wrap::-webkit-scrollbar{display:none;}
+/* MIX : tout l'écran sans défiler (bouton + fichiers sur une ligne, platines compactes, réglages à côté du disque) */
+#appScreen:has(#djRecBtn){zoom:1.12;} /* repli ; le zoom réel est calculé par ordiDjFit */
+#view-container:has(#djRecBtn){padding-left:16px; padding-right:16px;}
+#view-container:has(#djRecBtn){display:grid; grid-template-columns:auto 1fr 1.4fr; column-gap:10px; align-items:center; align-content:start;}
+#view-container:has(#djRecBtn) > *{grid-column:1 / -1;}
+#view-container:has(#djRecBtn) > .topbar{grid-column:1; padding:6px 0;}
+#view-container:has(#djRecBtn) > .hpad:has(#djRecBtn){grid-column:2; margin:0 !important; padding:0;}
+#view-container:has(#djRecBtn) > .hpad:has(#djDrop){grid-column:3; margin:0 !important; padding:0;}
+#djRecBtn{padding:10px;}
+#djDrop{padding:8px !important;}
+#djRes{max-height:96px !important; margin:6px 0;}
+#djRes .empty-msg{padding:4px;}
+#djRes .alert-item{padding-top:3px; padding-bottom:3px;}
+#view-container:has(#djRecBtn) > .hpad:has(#djDA){align-items:flex-start;}
+.hpad > div:has(> #djDA), .hpad > div:has(> #djDB){display:grid; grid-template-columns:170px minmax(0,1fr); column-gap:12px; align-items:center;}
+.hpad > div:has(> #djDA) > *, .hpad > div:has(> #djDB) > *{grid-column:2;}
+.hpad > div:has(> #djDA) > :first-child, .hpad > div:has(> #djDB) > :first-child{grid-column:1 / -1;}
+#djDA, #djDB{grid-column:1 !important; grid-row:2 / span 4; width:140px !important; height:140px !important; margin:4px auto !important;}
+#djIA, #djIB{width:64px !important; height:64px !important;}
+#djMixes .section-title{margin-top:4px; margin-bottom:2px;}
+#djMixes .empty-msg{padding:4px 16px;}
+.hpad > div:has(> #djDA) > :nth-child(7), .hpad > div:has(> #djDB) > :nth-child(7){grid-column:1; grid-row:6; margin:4px 0 0 !important;}
+.hpad > div:has(> #djDA) > :nth-child(8), .hpad > div:has(> #djDB) > :nth-child(8){grid-column:2; grid-row:6 / span 2;}
+.hpad > div:has(> #djDA) > :nth-child(9), .hpad > div:has(> #djDB) > :nth-child(9){grid-column:1; grid-row:7; margin-top:4px !important;}
+.hpad > div:has(> #djDA) > :nth-child(9) button, .hpad > div:has(> #djDB) > :nth-child(9) button{height:30px !important;}
+#djXf{margin:0;}
+#view-container:has(#djRecBtn) > .hpad:has(#djXf){margin:6px 0 !important;}
+#view-container:has(#djRecBtn) > div[style*="height:20px"]{display:none;}
 </style>
 </head>
 <body>
@@ -804,6 +832,20 @@ function ordiMetaFill(){
       .then(r=>r.ok ? r.json() : {}).then(d=>{ if(d && !d.error) Object.assign(ORDI_META, d); paint(); }).catch(()=>{});
 }
 new MutationObserver(()=>{ clearTimeout(ordiMetaT); ordiMetaT = setTimeout(ordiMetaFill, 300); }).observe(document.documentElement, { childList:true, subtree:true });
+// MIX : zoom calculé pour que l'écran remplisse la fenêtre (petite marge), sans défilement.
+let ordiDjBtn = null;
+function ordiDjFit(){
+  const app = document.getElementById('appScreen'), vc = document.getElementById('view-container'), nav = app && app.querySelector('.top-nav');
+  if(!app || !vc) return;
+  if(!document.getElementById('djRecBtn')){ app.style.zoom = ''; return; }
+  app.style.zoom = 1;
+  const top = vc.getBoundingClientRect().top, bottom = Math.max(...[...vc.children].map(c=>c.getBoundingClientRect().bottom)); // hauteur réelle du contenu (zoom 1)
+  let z = Math.max(0.7, Math.min(2, (innerHeight - 24) / ((nav ? nav.offsetHeight : 0) + bottom - top + 12)));
+  app.style.zoom = z;
+  for(let i = 0; i < 8 && vc.scrollHeight > vc.clientHeight + 1; i++){ z *= 0.97; app.style.zoom = z; } // filet : réduit tant que ça déborde
+}
+new MutationObserver(()=>{ const b = document.getElementById('djRecBtn'); if(b !== ordiDjBtn){ ordiDjBtn = b; ordiDjFit(); setTimeout(ordiDjFit, 600); } }).observe(document.documentElement, { childList:true, subtree:true });
+addEventListener('resize', ()=>{ clearTimeout(ordiDjBtn && ordiDjBtn._t); if(ordiDjBtn) ordiDjBtn._t = setTimeout(ordiDjFit, 150); });
 function renderRealTrackRow(entry, idx, locked, extra=''){
   const t = entry.tracks || {};
   const seedKey = (t.title||'')+'|'+(t.artist_name||'');
@@ -4113,7 +4155,7 @@ function djHTML(){
       <input type="range" id="djS${k}" min="0" max="1000" value="0" oninput="djSeek('${k}',this.value)" style="width:100%;margin:4px 0;accent-color:${col};">
       <div style="display:flex;gap:5px;"><button class="icon-btn" id="djP${k}" onclick="djPlay('${k}')" style="flex:1;">${playing?'⏸':'▶'}</button><button class="icon-btn" onclick="djCue('${k}')" style="flex:1;">CUE</button><button class="icon-btn" id="djSy${k}" onclick="djSync('${k}')" style="flex:1.6;font-weight:900;font-size:11px;background:${d.lock?col:'#2a2a36'};color:${d.lock?'#000':'#fff'};">${d.lock?'SYNC ON':'SYNC OFF'}</button><button class="icon-btn" id="djQb${k}" onclick="djQuant('${k}')" style="flex:1.3;font-weight:900;font-size:10px;background:${d.q?'#22c55e':'#2a2a36'};color:${d.q?'#000':'#fff'};">${d.q?'QUANT ON':'QUANT OFF'}</button></div>
       <div style="display:flex;justify-content:space-around;margin:10px 0 6px;">${djKnob(k,0,-12,12,'BASS',d.eq[0])}${djKnob(k,1,-12,12,'MED',d.eq[1])}${djKnob(k,2,-12,12,'AIGU',d.eq[2])}</div>
-      <div style="display:flex;justify-content:center;align-items:flex-end;gap:10px;"><div style="text-align:center;"><div style="display:flex;gap:2px;align-items:stretch;">${djFader('djPv'+k,DJR[0],DJR[1],0.002,d.pv,`djSet('${k}','pv',this.value)`,col)}<div id="djSc${k}" style="display:flex;flex-direction:column;justify-content:space-between;height:120px;font-size:8px;font-weight:800;color:var(--text-muted);text-align:left;min-width:24px;">${djScaleHTML(DJ[k])}</div></div><div id="djPl${k}" style="font-size:8.5px;color:var(--text-muted);font-weight:800;">${((d.pv-1)*100).toFixed(1)}%</div><div style="font-size:8.5px;color:var(--text-muted);font-weight:800;">TEMPO (BPM)</div></div><div style="text-align:center;">${djFader('djV'+k,0,1,0.01,d.vol,`djSet('${k}','vol',this.value)`,col)}<div style="font-size:8.5px;color:var(--text-muted);font-weight:800;margin-top:14px;">VOL</div></div></div>
+      <div style="display:flex;justify-content:center;align-items:flex-end;gap:10px;"><div style="text-align:center;"><div style="display:flex;gap:2px;align-items:stretch;">${djFader('djPv'+k,DJR[0],DJR[1],0.002,d.pv,`djSet('${k}','pv',this.value)`,col)}<div id="djSc${k}" style="display:flex;flex-direction:column;justify-content:space-between;height:120px;font-size:8px;font-weight:800;color:var(--text-muted);text-align:left;min-width:24px;">${djScaleHTML(DJ[k])}</div></div><div id="djPl${k}" style="font-size:8.5px;color:var(--text-muted);font-weight:800;">${djPlTxt(DJ[k])}</div><div style="font-size:8.5px;color:var(--text-muted);font-weight:800;">TEMPO (BPM)</div></div><div style="text-align:center;">${djFader('djV'+k,0,1,0.01,d.vol,`djSet('${k}','vol',this.value)`,col)}<div style="font-size:8.5px;color:var(--text-muted);font-weight:800;margin-top:14px;">VOL</div></div></div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:8px;">${pads}</div></div>`; };
   return `<style>.djsp{animation:djspin 2.2s linear infinite}@keyframes djspin{to{transform:rotate(360deg)}}.djk{width:36px;height:36px;border-radius:50%;margin:0 auto;background:radial-gradient(#3a3a48,#14141c);border:2px solid #555;touch-action:none;position:relative}.djk i{position:absolute;left:50%;top:2px;width:3px;height:10px;margin-left:-1.5px;background:#fff;border-radius:2px}</style>
   <div class="topbar"><div class="brand-row"><div class="brand"><span class="dot"></span>🎛️ MIX</div></div></div>
@@ -4202,7 +4244,8 @@ function djPad(k, i){ // 1er appui : mémorise la position ; ensuite : saute des
   else { d.a.currentTime = d.cues[i]; if(d.a.paused) djPlay(k); }
 }
 let djSyncing = false;
-const djScaleHTML = d => [1.16,1.08,1,0.92,0.84].map(p=>`<span>${d&&d.bpm?Math.round(d.bpm*p):((p-1)*100).toFixed(0)+'%'}</span>`).join('');
+const djScaleHTML = d => [1.16,1.08,1,0.92,0.84].map(p=>`<span>${d&&d.bpm?Math.round(d.bpm*p):'—'}</span>`).join('');
+const djPlTxt = d => d && d.bpm ? (d.bpm*d.pv).toFixed(1)+' BPM' : '— BPM'; // valeur sous le curseur tempo
 function djScale(k){ const e = document.getElementById('djSc'+k); if(e) e.innerHTML = djScaleHTML(DJ[k]); }
 function djSyncUI(){ [['A','#22d3ee'],['B','#facc15']].forEach(([k,c])=>{ const e = document.getElementById('djSy'+k), on = !!(DJ[k] && DJ[k].lock); if(e){ e.style.background = on?c:'#2a2a36'; e.style.color = on?'#000':'#fff'; e.textContent = on?'SYNC ON':'SYNC OFF'; } }); }
 function djTempoMatch(k){ // cale le tempo de k sur l'autre platine (octave repliée dans ±16 %)
@@ -4222,7 +4265,7 @@ function djSync(k){ // bouton SYNC : active / désactive le verrouillage sur l'a
   toast('Synchro activée sur '+(o.bpm*o.pv).toFixed(1)+' BPM'+(d.yt||o.yt ? ' (YouTube : tempo seulement, par pas de 5 %)' : (ph===null ? ' — lancez l\'autre platine pour caler les temps' : '')));
 }
 // ---- BPM / phase : verrouillage des pulsations entre les deux platines (extraits 30 s) ----
-function djBpmSet(k, bpm, off){ const d = DJ[k]; if(!d) return; d.bpm = bpm; if(off!=null) d.off = off; if(bpm && d.a.duration && !d.yt){ const P = 60/bpm, n = Math.max(4, Math.floor(((d.a.duration||30)-d.off)/P/16)*16); d.loopLen = n*P; } const e = document.getElementById('djB'+k); if(e) e.textContent = bpm ? (bpm*d.pv).toFixed(1)+' BPM' : '— BPM'; djScale(k); djFxApply(k); }
+function djBpmSet(k, bpm, off){ const d = DJ[k]; if(!d) return; d.bpm = bpm; if(off!=null) d.off = off; if(bpm && d.a.duration && !d.yt){ const P = 60/bpm, n = Math.max(4, Math.floor(((d.a.duration||30)-d.off)/P/16)*16); d.loopLen = n*P; } const e = document.getElementById('djB'+k); if(e) e.textContent = bpm ? (bpm*d.pv).toFixed(1)+' BPM' : '— BPM'; djScale(k); const pl = document.getElementById('djPl'+k); if(pl) pl.textContent = djPlTxt(d); djFxApply(k); }
 function djBpmEdit(k){ const d = DJ[k]; if(!d || !d.t) return; const v = parseFloat(String(prompt('BPM du titre (tempo normal) :', d.bpm ? d.bpm.toFixed(1) : '')||'').replace(',','.')); if(v>50 && v<250) djBpmSet(k, v); }
 // pulsation proche de t : on ajuste la grille de temps sur l'enveloppe locale (±8 s), donc pas de dérive même si le BPM global est un peu faux
 function djBeat(d, t){ const P = 60/d.bpm; return d.off + Math.floor((t-d.off)/P)*P; } // grille fixe (BPM + 1er temps), comme Rekordbox
@@ -4243,7 +4286,7 @@ setInterval(()=>{ // boucle calée sur un nombre entier de temps + re-verrouilla
 setInterval(()=>{ ['A','B'].forEach(k=>{ const d = DJ[k], o = DJ[k==='A'?'B':'A']; if(!d || !d.lock || !o) return; if(k==='A' && o.lock) return; djTempoMatch(k); if(!o.a.paused){ const both = !d.a.paused; djPhase(k, both && d.was); d.was = both; } else d.was = false; }); }, 300);
 function djSet(k, what, v){
   const d = djDeck(k); v = +v;
-  if(what==='pv'){ d.pv = v; if(!djSyncing) d.lock = null; d.a.playbackRate = v; const l = document.getElementById('djPl'+k), b = document.getElementById('djB'+k); if(!djSyncing){ djSyncUI(); } if(l) l.textContent = ((v-1)*100).toFixed(1)+'%'; djFxApply(k); if(b && d.bpm) b.textContent = (d.bpm*v).toFixed(1)+' BPM'; }
+  if(what==='pv'){ d.pv = v; if(!djSyncing) d.lock = null; d.a.playbackRate = v; const l = document.getElementById('djPl'+k), b = document.getElementById('djB'+k); if(!djSyncing){ djSyncUI(); } if(l) l.textContent = djPlTxt(d); djFxApply(k); if(b && d.bpm) b.textContent = (d.bpm*v).toFixed(1)+' BPM'; }
   else if(what==='vol'){ d.vol = v; djLevel(); } else { d.eq[what] = v; if(d.f) d.f[what].gain.value = v; }
 }
 /* ---- Mode « morceau entier » : lecteur YouTube derrière la même interface que <audio> (pas d'EQ : l'audio YouTube est inaccessible à WebAudio) ---- */
