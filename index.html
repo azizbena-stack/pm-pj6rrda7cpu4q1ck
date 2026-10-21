@@ -3720,16 +3720,6 @@ function icsChip(name, date, place){
   const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Pulse Music//FR','BEGIN:VEVENT','UID:'+f+'-'+strSeed(name+'|'+place)+'@pulse-music','DTSTAMP:'+f+'T000000Z','DTSTART;VALUE=DATE:'+f,'DTEND;VALUE=DATE:'+n.toISOString().slice(0,10).replace(/-/g,''),'SUMMARY:'+x(name),'LOCATION:'+x(place),'END:VEVENT','END:VCALENDAR'].join('\r\n');
   return `<a class="chip" download="evenement.ics" href="data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}">📅 Agenda</a>`;
 }
-async function artistEventsHTML(name){
-  const h = t=>`<div class="section-title"><h2>${t}</h2></div>`, today = new Date().toISOString().slice(0,10);
-  const evt = await fetchSC(name, `/api/v2/artist/{uuid}/events?type=all&sortBy=date&sortOrder=asc&startDate=${today}&endDate=${(+today.slice(0,4)+2)+today.slice(4)}&limit=50`), it = evt ? (evt.data.items||[]) : [];
-  if(!it.length){
-    // Soundcharts n'a rien : on complète avec Ticketmaster (fonction Supabase `events`)
-    let tm = []; try{ tm = (await (await fetch(SUPABASE_URL+'/functions/v1/events?name='+encodeURIComponent(name), {headers:SUPABASE_HEADERS})).json()).items || []; }catch(e){}
-    return tm.length ? h('🎪 Événements à venir (Ticketmaster)') + tm.map(x=>`<div class="alert-item"><div class="aic">🎤</div><div><div class="at">${esc(x.name)}</div><div class="ad">${esc([x.venue, x.city, x.country].filter(Boolean).join(', '))}</div><div class="atime">${esc(x.date)}</div><div class="chiprow" style="padding:6px 0 0;">${icsChip(x.name, x.date, [x.venue, x.city, x.country].filter(Boolean).join(', '))}${x.url ? `<a class="chip" href="${esc(x.url)}" target="_blank" rel="noopener">🎟️ Billets</a>` : ''}</div></div></div>`).join('') : '';
-  }
-  return h('🎪 Événements / festivals à venir') + it.map(x=>{ const v = x.venue||{}, f = x.festival; return `<div class="alert-item"><div class="aic">${x.type==='festival'?'🎪':'🎤'}</div><div><div class="at">${esc(x.name||'')}</div><div class="ad">${esc([v.name, v.cityName, v.countryName].filter(Boolean).join(', '))}</div><div class="atime">${esc(String(x.date||'').slice(0,10))}</div><div class="chiprow" style="padding:6px 0 0;">${icsChip(x.name, x.date, [v.name, v.cityName, v.countryName].filter(Boolean).join(', '))}</div></div></div>`; }).join('');
-}
 /* ---------------------------- IDENTIFIER (style Shazam) ----------------------------
    Micro → 8 s → fonction Supabase `identify` (AudD) → morceau ajouté au dossier « Morceaux trouvés » (gardé sur l'appareil). */
 const foundList = () => { try{ return JSON.parse(localStorage.getItem('pm_found'))||[]; }catch(e){ return []; } };
@@ -4217,7 +4207,9 @@ function djAutoStop(pause){
 async function loadArtistStats(){
   const name = state.radarArtist;
   const pf = state.statsPlatform || 'spotify';
-  const [rows, cat, world, sd] = await Promise.all([loadRadarRows(), fetchArtistCatalog(name), fetchWorld(), (pf==='spotify'||pf==='youtube') ? fetchArtistListen(name, pf) : null]);
+  // Quota Soundcharts : seul l'onglet ouvert interroge Soundcharts (Vue d'ensemble ou Audience).
+  const tb = state.statsTab==='audience' ? 'audience' : 'overview', aud = tb==='audience';
+  const [rows, world, sd] = await Promise.all([loadRadarRows(), aud ? fetchWorld() : null, aud && (pf==='spotify'||pf==='youtube') ? fetchArtistListen(name, pf) : null]);
   const host = document.getElementById('radarBody');
   if(!host || state.radarArtist!==name) return;
   const nn = normText(name), mine = rows.filter(r=>r.na.includes(nn));
@@ -4239,10 +4231,10 @@ async function loadArtistStats(){
       + h('📍 Où il est classé') + mine.slice().sort((a,b)=>a.rank-b.rank).slice(0,15).map(r=>`<div class="alert-item"><div class="aic">${r.kind==='g'?'🎧':'🌍'}</div><div><div class="at">${esc(r.title)}</div><div class="ad">${esc(radarWhere(r).slice(3))} · #${r.rank} ${realTrackMoveHTML(r.rank,r.prev)}</div></div></div>`).join('');
   }
   // Fiche artiste (Soundcharts)
-  const meta = await fetchSC(name, '/api/v2.9/artist/{uuid}'), mo = meta && meta.data && meta.data.object;
+  const meta = aud ? null : await fetchSC(name, '/api/v2.9/artist/{uuid}'), mo = meta && meta.data && meta.data.object;
   const head = !mo ? '' : `<div class="hpad" style="margin:10px 0;display:flex;gap:12px;align-items:center;">${mo.imageUrl ? `<img src="${esc(mo.imageUrl)}" alt="" referrerpolicy="no-referrer" style="width:64px;height:64px;border-radius:50%;object-fit:cover;">` : ''}<div style="min-width:0;"><div style="font-weight:800;font-size:15px;">${esc(mo.name)} ${mo.countryCode ? flagOf(mo.countryCode) : ''}</div><div style="font-size:11px;color:var(--text-muted);">${esc((mo.genres||[]).map(g=>g.root).filter(Boolean).join(' · '))}${mo.type ? ' · '+esc(mo.type) : ''}</div>${mo.biography ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">${esc(mo.biography.slice(0,170))}${mo.biography.length>170?'…':''}</div>` : ''}</div></div>`;
   // Vue d'ensemble (Soundcharts « current/stats ») + fil d'activités
-  const cs = await fetchSC(name, '/api/v2/artist/{uuid}/current/stats');
+  const cs = aud ? null : await fetchSC(name, '/api/v2/artist/{uuid}/current/stats');
   let ov = '';
   const o = cs && cs.data;
   if(o){
@@ -4256,6 +4248,7 @@ async function loadArtistStats(){
   }
   out = head + ov + out;
   const iB = out.length; // début de l'onglet Audience
+  if(aud){
   const PF = {
     spotify:['🟢 Spotify','#1db954',{chart:'spotify',pl:'spotify',st:'spotify',au:'spotify'}], youtube:['🔴 YouTube','#ff3b3b',{pl:'youtube',st:'youtube',au:'youtube'}],
     apple:['🍎 Apple Music','#fa2d48',{chart:'apple-music',pl:'apple-music'}], beatport:['🟠 Beatport','#ff7a00',{chart:'beatport'}],
@@ -4323,25 +4316,11 @@ async function loadArtistStats(){
     } else if(!cfg.st && !cfg.chart && !cfg.au) out += none(`Pas de playlists ${plabel} pour cet artiste.`);
   }
   if(real && Object.keys(real).length) out += h('🗺️ Carte du monde · '+plabel) + worldMapHTML(world, mine, real, pcol);
-  const iC = out.length; // début de l'onglet Catalogue
-  out += h('🍎 Catalogue Apple Music');
-  if(cat===null) out += '<div class="empty-msg">Catalogue Apple indisponible pour le moment, réessayez dans une minute.</div>';
-  else if(!cat.length) out += '<div class="empty-msg">Aucun titre trouvé sur Apple Music.</div>';
-  else {
-    const yr = {}, gen = {}; cat.forEach(x=>{ const y = (x.releaseDate||'').slice(0,4); if(y) yr[y] = (yr[y]||0)+1; if(x.primaryGenreName) gen[x.primaryGenreName] = (gen[x.primaryGenreName]||0)+1; });
-    const years = Object.keys(yr).sort(), max = Math.max(...Object.values(yr)), topG = Object.entries(gen).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]).join(', ');
-    const latest = cat.slice().sort((a,b)=>(b.releaseDate||'').localeCompare(a.releaseDate||''));
-    out += tiles([statTile(cat.length>=190?'200+':cat.length,'titres'), statTile(new Set(cat.map(x=>x.collectionName)).size,'sorties'), statTile(years[0]||'–','première sortie'), statTile((latest[0].releaseDate||'').slice(0,7)||'–','dernière sortie')])
-      + (topG ? `<div class="hpad" style="font-size:11.5px;color:var(--text-muted);margin-top:8px;">Genres Apple : ${esc(topG)}</div>` : '')
-      + h('📅 Titres par année') + `<div class="hpad" style="display:flex;align-items:flex-end;gap:5px;height:110px;">${years.map(y=>`<div style="flex:1;text-align:center;font-size:9px;color:var(--text-muted);"><div style="font-size:10px;font-weight:800;color:#fff;">${yr[y]}</div><div style="background:#7c5cff;border-radius:4px 4px 0 0;height:${Math.max(4,Math.round(yr[y]/max*62))}px;"></div>${y.slice(2)}</div>`).join('')}</div>`
-      + h('🆕 Dernières sorties') + latest.slice(0,5).map((x,i)=>{ const art = (x.artworkUrl100||'').replace('100x100','300x300')||null; if(x.previewUrl) itStore[itKey({title:x.trackName, artist:x.artistName})] = { p:x.previewUrl, v:x.trackViewUrl||null, a:art, t:Date.now() }; return radarCard(x.trackName, x.artistName, art, radarMatch(rows,x.trackName,x.artistName), i, esc((x.releaseDate||'').slice(0,10))); }).join('');
   }
-  const sg = await fetchSC(name, '/api/v2/artist/{uuid}/songs?limit=100');
-  if(sg && (sg.data.items||[]).length) out += h('🎼 Catalogue ('+(sg.data.page && sg.data.page.total || sg.data.items.length)+' titres)') + sg.data.items.map(x=>`<div class="alert-item"><div class="aic">${x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:40px;height:40px;border-radius:8px;object-fit:cover;">` : '🎵'}</div><div><div class="at">${esc(x.name)}</div><div class="ad">${esc(x.creditName||'')}</div></div>${catPlay(x.name, x.creditName||name, x.imageUrl)}</div>`).join('');
-  out += h('🔗 Voir l\'artiste') + `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;">${platformLinks(name, cat && cat[0] && cat[0].artistViewUrl)}</div>`
-    + '<div class="hpad" style="font-size:10px;color:var(--text-muted);margin-top:14px;line-height:1.5;">Sources : classements Beatport / Apple Music via Soundcharts, catalogue public Apple Music (200 titres maximum). Écoutes et abonnés : bientôt, selon les accords de données.</div>';
-  const tb = state.statsTab || 'overview', evH = tb==='events' ? ((await artistEventsHTML(name)) || '<div class="empty-msg">Aucun événement à venir trouvé.</div>') : '', tab = (k,l)=>`<span class="chip ${k===tb?'active':''}" data-action="stats-tab" data-t="${k}">${l}</span>`;
-  host.innerHTML = `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;margin-top:8px;">${tab('overview','📊 Vue d\'ensemble')}${tab('audience','🎧 Audience')}${tab('events','🎪 Événements')}${tab('catalog','🎼 Catalogue')}</div>` + (tb==='events' ? evH : tb==='audience' ? out.slice(iB, iC) : tb==='catalog' ? out.slice(iC) : out.slice(0, iB));
+  out += h('🔗 Voir l\'artiste') + `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;">${platformLinks(name)}</div>`
+    + '<div class="hpad" style="font-size:10px;color:var(--text-muted);margin-top:14px;line-height:1.5;">Sources : classements Beatport / Apple Music · Powered by Soundcharts</div>';
+  const tab = (k,l)=>`<span class="chip ${k===tb?'active':''}" data-action="stats-tab" data-t="${k}">${l}</span>`;
+  host.innerHTML = `<div class="hpad chiprow" style="flex-wrap:wrap;overflow:visible;margin-top:8px;">${tab('overview','📊 Vue d\'ensemble')}${tab('audience','🎧 Audience')}</div>` + (aud ? out.slice(iB) : out);
 }
 
 function radarSavedHTML(rows){
