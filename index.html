@@ -693,7 +693,6 @@ let plMap = lsObj('pm_pl'), plOpen = null;
 function plSave(){ try{ localStorage.setItem('pm_pl',JSON.stringify(plMap)); }catch(e){} }
 function renderPlaylists(){
   const head = `<div class="topbar"><div class="brand-row"><div class="brand"><span class="dot"></span>Playlists</div></div></div>`;
-  if(!isPro()) return head + `<div class="hpad" style="margin-top:40px;"><div class="card" style="text-align:center;"><div style="font-size:34px;">🎵🔒</div><h3 style="margin:10px 0 6px;">Playlists réservées aux membres Premium</h3><p style="color:var(--text-muted);font-size:12.5px;line-height:1.6;">Créez vos playlists et ajoutez-y vos morceaux préférés.</p><button class="btn btn-primary btn-block" style="margin-top:14px;" data-action="open-paywall">🔓 Débloquer Premium</button></div></div>`;
   if(plOpen && plMap[plOpen]){
     const rows = plMap[plOpen].map((f,i)=>`<div class="pl-row">${renderRealTrackRow({rank:i+1, previous_rank:null, tracks:{title:f.title, artist_name:f.artist, cover_url:null, youtube_id:null}}, i, false, `${f.bpm?`<span class="tabular pl-tag">${f.bpm} BPM</span>`:''}${f.key?`<span class="tabular pl-tag">${camelot(f.key)} · ${f.key}</span>`:''}<span class="mk pl-x" data-action="pl-rm" data-i="${i}">✕</span>`)}</div>`).join('');
     const setBar = `<div class="hpad pl-tools"><span class="pl-lbl">🎚️ Préparer un set :</span><button class="btn" data-action="pl-set" data-m="bpm">Par tempo (BPM)</button><button class="btn" data-action="pl-set" data-m="key">Par tonalité</button></div><div id="setStatus" class="hpad" style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${plMap[plOpen].some(f=>f.bpm||f.key) ? 'Trié : lancez « Dans l\'ordre ».' : 'Mesure le tempo ou la tonalité de chaque titre sur son extrait Apple Music.'}</div>`;
@@ -1329,7 +1328,7 @@ const I18N = {
     'home.topGlobal': `GLOBAL TOP 100`,
     'home.topPrefix': `TOP`,
     'home.pro': `Premium ↗`,
-    'home.unlockTop100': `🔓 Débloquer le Top 100 complet — Premium`,
+    'home.unlockTop100': `🔓 Voir le classement complet, les évolutions et les tendances — Premium`,
     'nextbig.title': `FUTURS HITS`,
     'nextbig.subtitle': `DÉTECTION PRÉCOCE`,
     'nextbig.proOnlyTitle': `Réservé aux membres Premium`,
@@ -1483,7 +1482,7 @@ const I18N = {
     'home.topGlobal': `GLOBAL TOP 100`,
     'home.topPrefix': `TOP`,
     'home.pro': `Premium ↗`,
-    'home.unlockTop100': `🔓 Unlock the full Top 100 — Premium`,
+    'home.unlockTop100': `🔓 See the full chart, movements and trends — Premium`,
     'nextbig.title': `NEXT BIG TRACKS`,
     'nextbig.subtitle': `EARLY DETECTION`,
     'nextbig.proOnlyTitle': `Premium members only`,
@@ -1637,7 +1636,7 @@ const I18N = {
     'home.topGlobal': `TOP 100 GLOBAL`,
     'home.topPrefix': `TOP`,
     'home.pro': `Premium ↗`,
-    'home.unlockTop100': `🔓 Desbloquear el Top 100 completo — Premium`,
+    'home.unlockTop100': `🔓 Ver el ranking completo, la evolución y las tendencias — Premium`,
     'nextbig.title': `PRÓXIMOS HITS`,
     'nextbig.subtitle': `DETECCIÓN TEMPRANA`,
     'nextbig.proOnlyTitle': `Solo para miembros Premium`,
@@ -1791,7 +1790,7 @@ const I18N = {
     'home.topGlobal': `GLOBALE TOP 100`,
     'home.topPrefix': `TOP`,
     'home.pro': `Premium ↗`,
-    'home.unlockTop100': `🔓 Komplette Top 100 freischalten — Premium`,
+    'home.unlockTop100': `🔓 Komplette Charts, Entwicklung und Trends ansehen — Premium`,
     'nextbig.title': `NEXT BIG TRACKS`,
     'nextbig.subtitle': `FRÜHERKENNUNG`,
     'nextbig.proOnlyTitle': `Nur für Premium-Mitglieder`,
@@ -3827,7 +3826,7 @@ function setsHTML(){
 function setAction(a, i){
   const L = lsGet('pm_sets', []), s = L[i]; if(!s) return;
   if(a==='tl-copy'){ const t = 'Tracklist '+setDate(s.d)+' (Pulse Music)\n'+s.items.map((x,j)=>`${j+1}. ${x.a} - ${x.t}`).join('\n'); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(()=>toast('Tracklist copiée')).catch(()=>{ if(navigator.share) navigator.share({text:t}).catch(()=>{}); }); }
-  else if(a==='tl-pl'){ if(!isPro()){ openPaywall(); return; } const n = 'Soirée '+setDate(s.d), l = plMap[n] = plMap[n] || []; s.items.forEach(x=>{ if(!l.some(f=>f.title===x.t && f.artist===x.a)) l.push({title:x.t, artist:x.a}); }); plSave(); toast('Playlist « '+n+' » créée'); }
+  else if(a==='tl-pl'){ const n = 'Soirée '+setDate(s.d), l = plMap[n] = plMap[n] || []; s.items.forEach(x=>{ if(!l.some(f=>f.title===x.t && f.artist===x.a)) l.push({title:x.t, artist:x.a}); }); plSave(); toast('Playlist « '+n+' » créée'); }
   else if(a==='tl-story'){ makeStory('MA SOIRÉE', setDate(s.d)+' · '+s.items.length+' morceaux', s.items.slice(0,10).map((x,j)=>({rank:j+1, title:x.t, sub:x.a}))); }
   else if(a==='tl-del'){ L.splice(i,1); lsSet('pm_sets', L); const h = document.getElementById('shzSets'); if(h) h.innerHTML = setsHTML(); }
 }
@@ -4656,7 +4655,7 @@ function openPaywall(){
         <div style="font-size:11px;color:var(--good-text);font-weight:700;margin-top:3px;">${tr('paywall.orYearly')}</div>
       </div>
       <div style="margin:18px 0;">
-        ${['paywall.f1','paywall.f2','paywall.f3','paywall.f4','paywall.f5','paywall.f6','paywall.f7'].map(k=>`
+        ${['paywall.f1','paywall.f2','paywall.f3','paywall.f4','paywall.f6','paywall.f7'].map(k=>`
           <div style="display:flex;gap:10px;align-items:center;padding:7px 0;font-size:13px;"><span style="color:var(--good-text);">✓</span>${tr(k)}</div>`).join('')}
       </div>
       <button class="btn btn-primary btn-block" data-action="buy-pro" data-plan="monthly">4,99&nbsp;€ ${tr('paywall.perMonth')}</button>
@@ -4970,7 +4969,7 @@ document.addEventListener('click', async (e)=>{
   else if(a==='pl-rm'){ plMap[plOpen].splice(+el.dataset.i,1); plSave(); renderView(); }
   else if(a==='share-track'){ const t = TRACKS.find(x=>x.id===el.dataset.id) || realTracksCache[el.dataset.id]; if(t) shareTrack(t); }
   else if(a==='pl-export'){ const L = plMap[plOpen]||[], u = URL.createObjectURL(new Blob(['\ufeff'+L.map((f,i)=>(i+1)+'. '+f.artist+' - '+f.title).join('\r\n')], {type:'text/plain'})), x = document.createElement('a'); x.href = u; x.download = plOpen+'.txt'; document.body.appendChild(x); x.click(); x.remove(); setTimeout(()=>URL.revokeObjectURL(u), 2000); }
-  else if(a==='add-pl'){ if(!isPro()) openPaywall(); else openAddPl(el.dataset.id); }
+  else if(a==='add-pl'){ openAddPl(el.dataset.id); }
   else if(a==='pl-add'){ addToPl(el.dataset.id, el.dataset.n); }
   else if(a==='toggle-heart'){ toggleHeart(el.dataset.id); }
   else if(a==='open-search'){ openSearch(); }
